@@ -1,4 +1,4 @@
-# API keys — never commit these
+# API keys
 .env
 
 # Python
@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 venv/
 env/
+newvenv/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -18,6 +19,3 @@ env/
 # OS noise
 .DS_Store
 Thumbs.db
-
-# NOTE: results/ is deliberately NOT ignored. Your run logs are evidence that
-# the test actually happened, and they're part of what gets graded. Commit them.
