@@ -15,8 +15,6 @@ data earns credit; *"80% seemed reasonable"* does not.
 > Missing your own targets next unit costs you nothing. Setting a target so
 > easy you can't miss it does.
 
-**Two are written for you. You write three.**
-
 ---
 
 ## 1. A matching query completes all three tools
@@ -24,10 +22,13 @@ data earns credit; *"80% seemed reasonable"* does not.
 Given a query that matches at least one listing, the agent completes all three
 tool calls and returns a fit card — in at least 4 of 5 tries.
 
-**Why this target:**
-<!-- Why 4 of 5 and not 5 of 5? Something about your search, probably —
-     "my search is a plain keyword match and some phrasings will miss" is a
-     real answer. -->
+**Why this target:** My search only matches whole words, so "tees" will miss a
+listing that says "tee", and my query parser is hand-written, so it can
+misread a size or price. Those are the misses I actually expect. The model
+calls can also come back empty or off, but the adapter retries rate limits, so
+those rarely sink a run. I'll use five differently phrased queries that each
+should match something, so a phrasing problem has a chance to show up instead
+of repeating five times. My target is 4 of 5 passing.
 
 ---
 
@@ -36,67 +37,63 @@ tool calls and returns a fit card — in at least 4 of 5 tries.
 Given a query that matches no listings, the agent stops before calling
 `suggest_outfit` and returns a message naming what to change — 5 of 5 tries.
 
-**Why this target:**
-<!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
-     about this path? -->
+**Why this target:** This path never touches the model, and there's no
+randomness in it. The search either returns an empty list or it doesn't, and
+the loop just checks that one thing. So if it fails even once, that's a bug in
+my branch. My target is 5 of 5 passing.
 
 ---
 
-## 3. Something about state
+## 3. State is carried through all three tools
 
-<!-- YOU WRITE THIS ONE.
+Run 5 different queries that each return a result. At least 2 of them must
+return several matches, and in at least 1 the selected item must not be the
+first listing in the file (lst_001). For each of the 5 runs, the listing `id`
+received by `suggest_outfit`, the `id` received by `create_fit_card`, and the
+`id` in `session["selected_item"]` at the end of the run must all be identical
+— 5 of 5 runs. (Checked by wrapping each tool and recording the item it
+receives.)
 
-     How would you know that the item your search found is the same item the
-     next tool received? Name something countable or observable.
-
-     This is the criterion people find hardest, because state failure doesn't
-     look like state failure — it looks like a tool problem. Something that
-     compares session["selected_item"] against what actually reached
-     suggest_outfit is the shape you're after. -->
-
-
-
-**Why this target:**
-
-
-
----
-
-## 4. Something about the fit card
-
-<!-- YOU WRITE THIS ONE.
-
-     The fit card calls a model, so the same input can produce different words
-     each time. That's not a bug — it's the nature of the tool. So what would
-     make it acceptable?
-
-     Think about what you'd actually be unhappy to see. A caption that never
-     mentions the price? Two different items producing the same opening
-     sentence? A card longer than a caption anyone would post? Any of those can
-     be turned into a number. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** Passing state around is plain code with no model in it,
+so nothing random can excuse a miss. If the ids differ even once, my loop is
+dropping or overwriting the item. I'm using different queries, including ones
+where the best match isn't the first listing in the file, because a bug like
+"always grab the first listing" would pass an easier test by accident. My
+target is 5 of 5 passing.
 
 ---
 
-## 5. Your choice
+## 4. The fit card holds up across different items
 
-<!-- YOU WRITE THIS ONE TOO.
+For 5 different items (at least one with `brand` None), each fit card is two
+to four sentences, contains the item's price and platform, and contains no
+"None" text. At least 4 of the 5 cards must pass all three checks. Separately,
+across the 5 cards, no two share the same opening sentence (5 of 5 distinct).
 
-     Pick something you actually care about getting right. Speed, the empty
-     wardrobe path, what happens when the model can't be reached, whether the
-     search respects a price ceiling — anything, as long as it names a number
-     or an observable outcome. -->
+**Why this target:** The model sometimes ignores an instruction, and my
+sentence counter is a rough split on `.`, `!` and `?` that emoji or "$24.00"
+can confuse, so demanding all 5 cards pass every check would punish my counter
+as much as the model. 4 of 5 leaves room for one of those. I kept the
+opening-sentence check at 5 of 5 because TEMPERATURE is 0.9 and the items are
+different, so two identical openings would mean my prompt is forcing a
+template, and that's the exact thing I want to catch.
 
+---
 
+## 5. An unreachable model produces a message, not a stack trace
 
-**Why this target:**
+With an invalid `GEMINI_API_KEY` and `AI201_CACHE=0`, running the agent ends
+with no Python traceback in the output, `session["error"]` set to a non-empty
+string that tells the user to check their key, and `session["fit_card"]` still
+`None` — in 5 of 5 tries. Tries 1–3 fail on the first model call
+(`suggest_outfit`); tries 4–5 fail only on the second (`create_fit_card`).
 
-
+**Why this target:** I expect to miss this the first time, because the
+`ModelUnavailable` handler doesn't exist yet and a bad key currently gives a
+traceback. I'm still setting it at 5 of 5. Once the handler is written, the
+behavior is predictable, and since either model call can fail, a handler that
+only covers one of them should fail this test. A lower target would only make
+sense if the failure were random, and it isn't.
 
 ---
 
