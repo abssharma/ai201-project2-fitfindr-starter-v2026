@@ -92,8 +92,7 @@ string that tells the user to check their key, and `session["fit_card"]` still
 `ModelUnavailable` handler doesn't exist yet and a bad key currently gives a
 traceback. I'm still setting it at 5 of 5. Once the handler is written, the
 behavior is predictable, and since either model call can fail, a handler that
-only covers one of them should fail this test. A lower target would only make
-sense if the failure were random, and it isn't.
+only covers one of them should fail this test.
 
 ---
 

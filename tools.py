@@ -23,6 +23,12 @@ the description has to say what is *in* the list.
 import config  # noqa: F401 — you'll use this in search_listings
 from generate import generate
 from utils.data_loader import load_listings
+import re
+
+_FILLER = {"a", "an", "the", "under", "size", "in", "for"}
+
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9']+", text.lower()))
 
 
 # ── Tool 1: search_listings ───────────────────────────────────────────────────
@@ -78,8 +84,24 @@ def search_listings(
     Test it from a terminal before you move on:
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
-    # TODO: replace this with your implementation
-    return []
+    wanted = _words(description) - _FILLER
+    scored = []
+    for item in load_listings():
+        if max_price is not None and item["price"] > max_price:
+            continue
+        if size:
+            tokens = [t for t in re.split(r"[\s/()]+", item["size"].lower()) if t]
+            if size.strip().lower() not in tokens:
+                continue
+        haystack = _words(" ".join([
+            item["title"], item["description"],
+            " ".join(item["style_tags"]), item["category"],
+        ]))
+        score = len(wanted & haystack)
+        if score > 0:
+            scored.append((score, item))
+    scored.sort(key=lambda p: -p[0])
+    return [item for _, item in scored][: config.SEARCH_RESULT_LIMIT]
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
@@ -112,8 +134,24 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    items = (wardrobe or {}).get("items") or []
+    item_line = (f"{new_item['title']} ({new_item['category']}, "
+                 f"colors: {', '.join(new_item['colors'])}, "
+                 f"style: {', '.join(new_item['style_tags'])})")
+    if not items:
+        prompt = (f"Someone is thinking of buying this thrifted item: {item_line}.\n"
+                  "They haven't told me what they own. Give general styling advice "
+                  "and one or two outfit ideas using common basics.")
+    else:
+        owned = "\n".join(
+            f"- {w['name']} ({w['category']}, {', '.join(w['colors'])}; {w['notes']})"
+            for w in items)
+        prompt = (f"Someone is thinking of buying this thrifted item: {item_line}.\n"
+                  f"Their wardrobe:\n{owned}\n\n"
+                  "Suggest one or two outfits that combine the new item with pieces "
+                  "from this wardrobe. Refer to wardrobe pieces by their exact names.")
+    text = generate(prompt, system="You are a concise thrift-store stylist.")
+    return text or "Pair it with simple basics in neutral colors."
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -152,5 +190,14 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    if not outfit or not outfit.strip():
+        return "No outfit was provided, so no fit card was written."
+    prompt = (
+        f"Write a social media caption of 2 to 4 sentences about a thrift find.\n"
+        f"Item: {new_item['title']}\nPrice: ${new_item['price']:.0f}\n"
+        f"Platform: {new_item['platform']}\nOutfit idea: {outfit}\n\n"
+        "Rules: sound like a real person posting, not a product description. "
+        "Mention the price and the platform once each. Be specific about the vibe. "
+        "Do not mention a brand."
+    )
+    return generate(prompt, system="You write casual, authentic fashion captions.")
