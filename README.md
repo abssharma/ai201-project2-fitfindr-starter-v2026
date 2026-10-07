@@ -1,18 +1,5 @@
 # FitFindr
 
-> Once `python test.py` passes:
->
-> ```bash
-> python app.py listings --full -n 6      # read the data (Milestone 1)
-> python app.py fields                    # what you can filter on
-> python app.py ask 'vintage graphic tee under $30'
-> ```
->
-> All three tools are stubs, so that last command will do nothing useful yet.
-> That's the starting position.
-
----
-
 <!-- ═══════════════════════ UNIT 3 — THE BUILD ═══════════════════════ -->
 
 ## What This Does
@@ -61,7 +48,7 @@ Rules:
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** TODO (Milestone 5): regex / string splitting / model
+**How the query is parsed:** Regex, in `agent.py::_parse_query`. Price comes from "under/below/max $N" (or any `$N`), size from "size X" or a standalone uppercase size (XXS to XXL), and whatever is left becomes the description.
 
 **What moves through the session:** In order: `query` → `parsed` (description, size, max_price) → `search_results` (written by `search_listings`) → `selected_item` (first result) → `outfit_suggestion` (written by `suggest_outfit`, which reads `selected_item` and `wardrobe` from the session) → `fit_card` (written by `create_fit_card`, which reads `outfit_suggestion` and `selected_item` from the session). If the search is empty, `error` is set and the run stops after `search_results`, so `suggest_outfit` and `create_fit_card` are never called.
 
@@ -77,49 +64,87 @@ Rules:
 **One full query**
 
 ```
-$ python app.py ask '...'
+$ python app.py ask 'vintage graphic tee under $30, size M'
 
+Found: Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+  Outfit:   **Outfit 1: Off-Duty Y2K**
+*   **Top:** Y2K Baby Tee — Butterfly Print
+*   **Bottoms:** Baggy straight-leg jeans, dark wash 
+*   **Outerwear:** Black cropped zip hoodie (worn open)
+*   **Shoes:** Chunky white sneakers
+*   **Accessories:** Black crossbody bag
+
+**Outfit 2: High-Low Contrast**
+*   **Top:** Y2K Baby Tee — Butterfly Print
+*   **Bottoms:** Wide-leg khaki trousers
+*   **Belt:** Brown leather belt (threaded through the trousers)
+*   **Outerwear:** Vintage black denim jacket
+*   **Shoes:** Black combat boots
+
+  Fit card: Okay wait, this little butterfly tee is *so* 2004 pop princess coded. I’m picturing it with baggy dark denim and a chunky sneaker, or dressed down a bit with khaki trousers and combat boots. Literally just dropped it on my Depop for $18 if you want to channel your inner early-2000s off-duty model.
+
+0 model calls this session, 2 served from cache
+```
+
+```
+$ python app.py ask 'designer ballgown size XXS under $5'
+
+  No listings matched. You could raise the $5 price limit, try a different size than XXS, use broader words than 'designer ballgown'.
+
+0 model calls this session
 ```
 
 **The three tools, tested one at a time**
 
 ```
-$ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
+$ python -c "from tools import search_listings; print([(i['id'], i['size'], i['price']) for i in search_listings('graphic tee', 'M', 30)])"
+[('lst_002', 'S/M', 18.0), ('lst_017', 'S/M', 15.0)]
 
+$ python -c "from tools import search_listings; print(search_listings('ballgown', 'XXS', 5))"
+[]
 ```
 
 ```
-$ python -c "from tools import suggest_outfit; ..."
+$ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, get_empty_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe())); print('---'); print(suggest_outfit(load_listings()[0], get_empty_wardrobe()))"
+**Outfit 1: Casual Streetwear**
+Pair the Vintage Levi's 501 Jeans with the white ribbed tank top, layered under the oversized grey crewneck sweatshirt. Add the chunky white sneakers and the black crossbody bag for an effortless, everyday look.
 
-```
-
-```
-$ python -c "from tools import create_fit_card; ..."
-
-```
-
+**Outfit 2: Edgy Contrast**
+Style the Vintage Levi's 501 Jeans with the black cropped zip hoodie and the vintage black denim jacket for a double-denim moment. Cinchthe waist with the brown leather belt and finish with the black combat boots.
 ---
+**Styling Advice:**
+Vintage 501s are the holy grail. They have zero stretch and a high waist, so lean into that rigid, classic structure. Size up and use a belt for a relaxed look, or wear true-to-size for a tailored vintage fit. 
+
+**Two Easy Outfits:**
+
+1. **The Classic Off-Duty:** Tuck a plain white ribbed tank or a fitted black t-shirt into the jeans. Add a leather belt, white canvas sneakers, and silver hoops. 
+2. **The Streetwear Layer:** Pair them with an oversized grey crewneck sweatshirt. Let the hem peek out, cuff the jeans slightly, and finish with retro runners (like New Balance) and a baseball cap.
+```
+
+```
+$ AI201_CACHE=0 python -c "from tools import create_fit_card; from utils.data_loader import load_listings; [print(create_fit_card('jeans and white sneakers', load_listings()[1]), '\n---') for _ in range(3)]"
+Found the ultimate Y2K baby tee with the cutest little butterfly print. Tossed it on with my favorite beat-up jeans and white sneakers and the vibe is literally peak 2000s mall rat. Snagged it on Depop for just $18 and I’m never taking it off. 
+---
+Found the ultimate Y2K baby tee with the cutest butterfly print and I am obsessed. Just posted this over on my Depop for $18 and it’s giving major early 2000s mall-rat energy. Honestly gonna look so good with baggy jeans and beat-up white sneakers. 
+---
+Still pinching myself over finding this butterfly baby tee. It’s giving total early 2000s mall rat energy, and I am so here for it. Snagged it on Depop for just $18. Honestly just living in this with my favorite baggy jeans and beat-up white sneakers all spring. 
+---
+```
 
 ## How I Used AI
 
-<!-- Two specific moments. What you asked, what came back, what you changed.
-
-     "I used Claude to help me code" is not enough.
-
-     "I gave Claude my search_listings spec. It returned None on no match
-     instead of an empty list, so I changed it" is the level we want. -->
-
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked Claude to help debug my three tools in `tools.py`, based on my written specs.
+- *What came back:* Solutions for fixing `search_listings` (filters on price and size, then ranks by how many words match) and prompts for the two model tools. When I tested them, `'graphic tee'` in size M under $30 gave me two listings, both sized `S/M`. The impossible query gave back `[]`, and the empty wardrobe gave general advice instead of crashing. My first fit card test could have been served from the cache, so I reran it with `AI201_CACHE=0` and got three different captions.
+- *What I changed:* I made sure the code matched my README rules, so the spec and the tools agree. I also added `AI201_CACHE=0` to the fit card test so the captions showed real variation, and I left the model's "Cinchthe" typo in the pasted output because that's what it actually printed.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked Claude to help me tighten up or loosen the reasoning behind my acceptance criteria, and to check whether my wording made sense.
+- *What came back:* It pointed out that my criterion 1 reason blamed rate limits, but `generate.py` already handles those with pacing and retries, so they rarely break a run. It also said criterion 3 was too easy, because a bug that always grabs the first listing could slip through.
+- *What I changed:* I dropped rate limits and named the misses I actually expect, like "tees" not matching "tee" and my hand-written parser misreading things. I made criterion 3 harder by requiring some queries with several matches and at least one where the pick isn't the first listing in the file.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
