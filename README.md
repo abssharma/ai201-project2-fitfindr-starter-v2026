@@ -1,10 +1,5 @@
 # FitFindr
 
-> ### 👋 Start here
->
-> **New to this repo? Read [RUNNING.md](RUNNING.md) first** — setup, every
-> command, and what to do when something breaks.
->
 > Once `python test.py` passes:
 >
 > ```bash
@@ -15,91 +10,60 @@
 >
 > All three tools are stubs, so that last command will do nothing useful yet.
 > That's the starting position.
->
-> **The rest of this file is your submission.** Fill it in as you go.
 
 ---
-
-<!-- ─────────────────────────────────────────────────────────────────────────
-     HOW TO USE THIS FILE
-
-     This is your submission. Fill each section in as you finish the milestone
-     it belongs to — don't leave it all to the end.
-
-     Unit 3 asks for the first five sections. Unit 4 adds the five below them.
-     Leave the unit 4 sections alone until then; they're here so you know
-     what's coming.
-
-     Everything is pasted as TEXT. No screenshots, no images, no video links.
-     A typed block of output gets full credit; a picture of the same output
-     gets none.
-     ───────────────────────────────────────────────────────────────────────── -->
 
 <!-- ═══════════════════════ UNIT 3 — THE BUILD ═══════════════════════ -->
 
 ## What This Does
 
-<!-- Three or four sentences: what a user asks for, and what they get back. -->
-
-
+FitFindr is a thrifting agent. A user types a request such as "a vintage graphic tee under $30, size M", and the agent searches a file of secondhand listings, picks the best match, suggests outfits that pair it with clothes from the user's wardrobe, and writes a short caption they could post. If nothing matches, it stops and tells the user what to change (the description, size, or price limit) instead of continuing.
 
 ---
 
 ## Tool Inventory
 
-<!-- Four lines per tool. This is worth 2 points and it's the single most
-     common place students lose them.
-
-     "Returns a list" earns NOTHING. The description has to say what is IN
-     the list.
-
-     The empty case isn't optional either — it's the thing your loop branches
-     on, and if you don't decide it here you'll discover it as a crash in
-     Milestone 5. -->
-
 ### `search_listings`
 
-- **What it does:**
-- **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Searches the listings file for items matching a keyword description, an optional size, and an optional price ceiling, and returns them best match first.
+- **Inputs:** `description` (str), `size` (str or None), `max_price` (float or None)
+- **Returns:** A list of at most 10 listing dicts (`config.SEARCH_RESULT_LIMIT`), best keyword match first. Each dict has `id` (str), `title` (str), `description` (str), `category` (str), `style_tags` (list), `size` (str), `condition` (str), `price` (float), `colors` (list), `brand` (str or None), `platform` (str).
+- **When it has nothing:** Returns an empty list `[]`, never None and never an exception.
+
+Rules:
+
+1. The requested size must equal one whole token of the listing's size. Tokens come from splitting the listing's size on spaces, "/", and parentheses, and the comparison is case-insensitive. So "M" matches "M" and "S/M", but not "XL (oversized)" or "US 9".
+2. `price <= max_price` is inclusive.
+3. A listing scores one point per distinct description word found in its title, description, style_tags, or category, no matter how many times the word appears. Words match as whole words, case-insensitive, so "tee" does not match "steel". A score of 0 is dropped.
+4. Filler words ("a", "an", "the", "under", "size", "in", "for") are ignored.
+5. If size or max_price is None, that filter is skipped.
+6. Results are sorted by score, highest first. Ties keep the order they have in the listings file.
 
 ### `suggest_outfit`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Asks the model for one or two outfits that pair the found item with pieces from the user's wardrobe.
+- **Inputs:** `new_item` (dict, one listing), `wardrobe` (dict with an `items` key holding a list of dicts, each with `id`, `name`, `category`, `colors`, `style_tags`, `notes`)
+- **Returns:** A non-empty str with one or two outfit suggestions that name wardrobe pieces by their `name`.
+- **When it has nothing:** If `wardrobe['items']` is empty or the wardrobe has no `items` key, it returns a non-empty str of general styling advice for the item. It never returns "" and never raises.
 
 ### `create_fit_card`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Writes a short social-media caption about the item and its outfit.
+- **Inputs:** `outfit` (str, the output of suggest_outfit), `new_item` (dict, one listing)
+- **Returns:** A str of two to four sentences that mentions the item, its price, and its platform once each.
+- **When it has nothing:** If `outfit` is empty or whitespace, it returns the str "No outfit was provided, so no fit card was written." It never returns "" and never raises.
 
 ---
 
 ## Planning Loop
 
-<!-- Your branch rule, stated as a rule — the condition AND both paths — plus
-     the file and function that holds it.
-
-     Like this:
-       "If search_listings returns an empty list, put a message in the session
-        and stop. Otherwise take the first result and go to suggest_outfit."
-        — agent.py::run_agent
-
-     The grader checks your code against what you claim here, so the file and
-     function have to be real. -->
-
-**Branch rule:**
+**Branch rule:** If search_listings returns an empty list, set session["error"] to a sentence naming what the user could change (description, size, or price ceiling), leave session["fit_card"] as None, and return without calling suggest_outfit. Otherwise set session["selected_item"] to the first result in session["search_results"], then call suggest_outfit with the item read back from the session.
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+**How the query is parsed:** TODO (Milestone 5): regex / string splitting / model
 
-**What moves through the session:** <!-- which fields, in what order -->
+**What moves through the session:** In order: `query` → `parsed` (description, size, max_price) → `search_results` (written by `search_listings`) → `selected_item` (first result) → `outfit_suggestion` (written by `suggest_outfit`, which reads `selected_item` and `wardrobe` from the session) → `fit_card` (written by `create_fit_card`, which reads `outfit_suggestion` and `selected_item` from the session). If the search is empty, `error` is set and the run stops after `search_results`, so `suggest_outfit` and `create_fit_card` are never called.
 
 ---
 
